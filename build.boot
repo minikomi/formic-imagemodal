@@ -1,7 +1,7 @@
 (def project 'co.poyo/formic-imagemodal)
 (def version "0.1.0-SNAPSHOT")
 
-(set-env! :src-paths #{"src/cljs"}
+(set-env! :resource-paths #{"src"}
           :dependencies   '[[org.clojure/clojure "1.9.0"]
                             [org.clojure/clojurescript "1.10.238"]
                             [adzerk/bootlaces "0.1.13"]
