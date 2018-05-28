@@ -124,7 +124,7 @@
             [:ul#image-grid
              (doall
               (for [i (:current-images @state)]
-                :imagemodal imagemodal/image-field ^{:key i}
+                ^{:key i}
                 [:li {:class (when (= i @current-value) "selected")}
                  [:a
                   {:on-click (fn [ev]
