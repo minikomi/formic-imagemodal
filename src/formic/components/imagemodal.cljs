@@ -17,7 +17,11 @@
                                  js/document
                                  "__anti-forgery-token"))}}
             dz (js/Dropzone. "#upload" (clj->js dropzone-options))]
-        (.on dz "success" #(println %))))
+        (.on dz "sending" (fn [ev]
+                            (reset! panel-state :sending)))
+        (.on dz "complete" (fn [ev]
+                            (reset! panel-state :select)))
+        ))
     :reagent-render
     (fn [panel-state f]
       [:div.dropzone.needsclick.dz-clickable
@@ -104,7 +108,6 @@
       :reagent-render
       (fn [panel-state f]
         [:div.modal-panel
-         [:pre (prn-str @current-value)]
          (case (:mode @state)
            :loaded
            [:div
@@ -121,55 +124,67 @@
                                           (.preventDefault ev)
                                           (swap! state update-in [:current-page] inc)
                                           (get-images))} "next"]]])
-            [:ul#image-grid
+            [:ul.formic-modal-image-grid
              (doall
-              (for [i (:current-images @state)]
+              (for [i (:current-images @state)
+                    :let [thumb-src ((or (:image->thumbnail f) identity) i)
+                          current-src ((or (:image->thumbnail f) identity) @current-value)]]
                 ^{:key i}
-                [:li {:class (when (= i @current-value) "selected")}
+                [:li {:class (when (= thumb-src current-src) "selected")}
                  [:a
                   {:on-click (fn [ev]
                                (.preventDefault ev)
                                (reset! current-value i)
                                (reset! panel-state :closed))}
-                  [:img {:src (:uri i)}]]]))]]
+                  [:img {:src thumb-src}]]]))]]
            :error
            [:div.error
             [:h4 "Loading Error."]
             [:button {:on-click (fn [ev]
                                   (.preventDefault ev)
                                   (get-images))}
-             "Retry."]]
+             "Retry"]]
            :loading
            [:h4 "Loading"])])})))
 
 (defn panel-select [panel-state]
-  [:ul
-   (for [new-state [:select :upload]]
-     ^{:key new-state}
-     [:li
-      [:a {:href "#"
-           :on-click (fn [ev]
-                       (.preventDefault ev)
-                       (reset! panel-state new-state))}
-       (name new-state)]])])
+  [:ul.formic-image-modal-panel-select
+   (when (not= @panel-state :sending)
+     (doall
+      (for [new-state [:select :upload]]
+        ^{:key new-state}
+        [:li
+         {:class (when (= @panel-state new-state) "active") }
+         [:a {:href "#"
+              :on-click (fn [ev]
+                          (.preventDefault ev)
+                          (reset! panel-state new-state))}
+          (name new-state)]])))])
 
 (defn image-field [f]
   (let [panel-state (r/atom :closed)]
     (fn [f]
       [:div.formic-image-field
        (if @(:current-value f)
-         [:img {:src (:uri @(:current-value f))}]
+         [:img.formic-image-current
+          {:src ((or
+                  (:image->src f)
+                  (:image->thumbnail f)
+                  identity)
+                 @(:current-value f))}]
          [:h4 "Not Selected"])
-       [:button
+       [:a.formic-image-open-modal.button
         {:on-click (fn [ev]
                      (.preventDefault ev)
                      (reset! panel-state :select))} "Select"]
        (when (not= :closed @panel-state)
-         [:div.image-modal
-          [panel-select panel-state]
-          (case @panel-state
-            :select [select-panel panel-state f]
-            :upload (if (get-in f [:endpoints :get-signed])
-                      [:span "TODO"]
-                      ;;[s3-upload-panel panel-state f]
-                      [upload-panel panel-state f]))])])))
+         [:div.formic-image-modal
+          [:div.formic-image-modal-inner
+           [panel-select panel-state]
+           (case @panel-state
+             :select [select-panel panel-state f]
+             (:sending :upload)
+             (if (get-in f [:endpoints :get-signed])
+               [:span "TODO"]
+               ;;[s3-upload-panel panel-state f]
+               [upload-panel panel-state f]))]])])))
