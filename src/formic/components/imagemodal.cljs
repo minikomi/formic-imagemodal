@@ -6,11 +6,12 @@
 ;; Server Upload
 ;; -------------------------------------------------------------------------------
 
-(defn upload-panel [panel-state {:keys [endpoints current-value err]}]
+(defn upload-panel [panel-state {:keys [current-value err options]}]
   (r/create-class
    {:component-did-mount
     (fn [this]
-      (let [dropzone-options
+      (let [{:keys [endpoints]} options
+            dropzone-options
             {:url (:upload endpoints)
              :headers {"X-CSRF-Token"
                        (.-value (.getElementById
@@ -78,8 +79,9 @@
 
 ;; Select panel
 
-(defn select-panel [panel-state {:keys [endpoints current-value err]}]
-  (let [state (r/atom {:current-page 0
+(defn select-panel [panel-state {:keys [current-value err options]}]
+  (let [{:keys [endpoints]} options
+        state (r/atom {:current-page 0
                        :current-images nil
                        :mode :loading})
         get-images (fn []
