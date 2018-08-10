@@ -6,7 +6,7 @@
 ;; Server Upload
 ;; -------------------------------------------------------------------------------
 
-(defn upload-panel [panel-state {:keys [current-value err options]}]
+(defn upload-panel [panel-state {:keys [value err options]}]
   (r/create-class
    {:component-did-mount
     (fn [this]
@@ -50,7 +50,7 @@
 ;;   {:component-did-mount
 ;;    (fn [this]
 ;;      (let [endpoints (:endpoints @f)
-;;            current-value (r/cursor f [:current-value])
+;;            value (r/cursor f [:value])
 ;;            error (r/cursor f [:error])
 ;;            ;; need to declare dz since it's used in options as well
 ;;            dz (atom nil)
@@ -79,7 +79,7 @@
 
 ;; Select panel
 
-(defn select-panel [panel-state {:keys [current-value err options]}]
+(defn select-panel [panel-state {:keys [value err options]}]
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page 0
                        :current-images nil
@@ -130,13 +130,13 @@
              (doall
               (for [i (:current-images @state)
                     :let [thumb-src ((or (:image->thumbnail f) identity) i)
-                          current-src ((or (:image->thumbnail f) identity) @current-value)]]
+                          current-src ((or (:image->thumbnail f) identity) @value)]]
                 ^{:key i}
                 [:li {:class (when (= thumb-src current-src) "selected")}
                  [:a
                   {:on-click (fn [ev]
                                (.preventDefault ev)
-                               (reset! current-value i)
+                               (reset! value i)
                                (reset! panel-state :closed))}
                   [:img {:src thumb-src}]]]))]]
            :error
@@ -167,13 +167,13 @@
   (let [panel-state (r/atom :closed)]
     (fn [f]
       [:div.formic-image-field
-       (if @(:current-value f)
+       (if @(:value f)
          [:img.formic-image-current
           {:src ((or
                   (:image->src f)
                   (:image->thumbnail f)
                   identity)
-                 @(:current-value f))}]
+                 @(:value f))}]
          [:h4 "Not Selected"])
        [:a.formic-image-open-modal.button
         {:on-click (fn [ev]
