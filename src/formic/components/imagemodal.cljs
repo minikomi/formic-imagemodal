@@ -198,7 +198,7 @@
                ;;[s3-upload-panel panel-state f]
                [upload-panel panel-state f]))]])
        (when @err
-         [:h3.error err])])))
+         [:h3.error @err])])))
 
 (field/register-component
  :formic-imagemodal
