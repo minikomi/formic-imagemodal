@@ -1,7 +1,9 @@
 (ns formic.components.imagemodal
   (:require [ajax.core :refer [GET POST]]
             [cljsjs.dropzone]
-            [reagent.core :as r]))
+            [reagent.core :as r]
+            [formic.util :as u]
+            [formic.field :as field]))
 
 ;; Server Upload
 ;; -------------------------------------------------------------------------------
@@ -163,15 +165,20 @@
                           (reset! panel-state new-state))}
           (name new-state)]])))])
 
-(defn image-field [f]
-  (let [panel-state (r/atom :closed)]
+(defn image-field [{:keys [id err options] :as f}]
+  (let [panel-state (r/atom :closed)
+        {:keys [image->src
+                image->thumbnail]} options]
     (fn [f]
       [:div.formic-image-field
+       {:class (when @err "error")}
+       [:span.formic-input-title
+        (u/format-kw id)]
        (if @(:value f)
          [:img.formic-image-current
           {:src ((or
-                  (:image->src f)
-                  (:image->thumbnail f)
+                  (image->src f)
+                  (image->thumbnail f)
                   identity)
                  @(:value f))}]
          [:h4 "Not Selected"])
@@ -186,7 +193,13 @@
            (case @panel-state
              :select [select-panel panel-state f]
              (:sending :upload)
-             (if (get-in f [:endpoints :get-signed])
+             (if (get-in f [:options :endpoints :get-signed])
                [:span "TODO"]
                ;;[s3-upload-panel panel-state f]
-               [upload-panel panel-state f]))]])])))
+               [upload-panel panel-state f]))]])
+       (when @err
+         [:h3.error err])])))
+
+(field/register-component
+ :formic-imagemodal
+ {:component image-field})
