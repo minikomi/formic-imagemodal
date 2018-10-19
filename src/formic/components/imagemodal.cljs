@@ -3,7 +3,14 @@
             [cljsjs.dropzone]
             [reagent.core :as r]
             [formic.util :as u]
-            [formic.field :as field]))
+            [formic.field :as field]
+            [clojure.string :as str]))
+
+;; required endpoints
+;;  - upload
+;;  - list
+;;    -- optional page var
+;;    -- optional search-str var
 
 ;; Server Upload
 ;; -------------------------------------------------------------------------------
@@ -12,18 +19,19 @@
   (r/create-class
    {:component-did-mount
     (fn [this]
-      (let [{:keys [endpoints]} options
+      (let [{:keys [data endpoints]} options
             dropzone-options
             {:url (:upload endpoints)
              :headers {"X-CSRF-Token"
                        (.-value (.getElementById
                                  js/document
-                                 "__anti-forgery-token"))}}
+                                 "__anti-forgery-token"))}
+             :data data}
             dz (js/Dropzone. "#upload" (clj->js dropzone-options))]
         (.on dz "sending" (fn [ev]
                             (reset! panel-state :sending)))
         (.on dz "complete" (fn [ev]
-                            (reset! panel-state :select)))
+                             (reset! panel-state :select)))
         ))
     :reagent-render
     (fn [panel-state f]
@@ -85,6 +93,7 @@
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page 0
                        :current-images nil
+                       :search-str nil
                        :mode :loading})
         get-images (fn []
                      (swap! state assoc
@@ -98,7 +107,8 @@
                                     :next-page (:next-page data)
                                     :prev-page (:prev-page data)
                                     :mode :loaded))
-                           :params {:page (:current-page @state)}
+                           :params {:page (:current-page @state)
+                                    :search-str (or (:search-str @state) "")}
                            :error-handler
                            (fn [_]
                              (swap! state assoc
@@ -112,44 +122,83 @@
       :reagent-render
       (fn [panel-state f]
         [:div.modal-panel
-         (case (:mode @state)
-           :loaded
-           [:div
-            [:h5 "Page " (-> @state :current-page inc)]
-            (when (or (:next-page @state) (:prev-page @state))
-              [:ul
-               [:li [:button {:disabled (not (:prev-page @state))
-                              :on-click (fn [ev]
-                                          (.preventDefault ev)
-                                          (swap! state update-in [:current-page] dec)
-                                          (get-images))} "prev"]]
-               [:li [:button {:disabled (not (:next-page @state))
+         {:class (get-in options [:classes :modal-panel])}
+         [:div.modal-panel-inner
+          {:class (get-in options [:classes :modal-panel-inner])}
+          [:h5
+           {:class (get-in options [:classes :modal-panel-title])}
+           "Page " (-> @state :current-page inc)]
+          (when (:search options)
+            [:div
+             [:input {:type "text"
+                      :value (:search-str @state)
+                      :class (get-in options [:classes :search-input])
+                      :on-change (fn [ev]
+                                   (swap! state
+                                          assoc
+                                          :search-str (.. ev -target -value)))}]
+             [:a.formic-image-search-button
+              {:class (get-in options [:classes :search-button])
+               :href "#"
+               :on-click (fn [ev]
+                           (.preventDefault ev)
+                           (when (not (str/blank? (:search-str @state)))
+                             (get-images)))}
+              "Search"]])
+          (when (and (:paging options)
+                     (or (:next-page @state) (:prev-page @state)))
+            [:ul
+             (when (:prev-page @state)
+               [:li [:a.formic-image-page-button
+                     {:class (get-in options [:classes :page-button])
+                      :href "#"
+                      :on-click (fn [ev]
+                                  (.preventDefault ev)
+                                  (swap! state update-in [:current-page] dec)
+                                  (get-images))} "<"]])
+             (when (:next-page @state)
+               [:li [:button {:class (get-in options [:classes :page-button])
+                              :href "#"
                               :on-click (fn [ev]
                                           (.preventDefault ev)
                                           (swap! state update-in [:current-page] inc)
-                                          (get-images))} "next"]]])
-            [:ul.formic-modal-image-grid
-             (doall
-              (for [i (:current-images @state)
-                    :let [thumb-src ((or (:image->thumbnail f) identity) i)
-                          current-src ((or (:image->thumbnail f) identity) @value)]]
-                ^{:key i}
-                [:li {:class (when (= thumb-src current-src) "selected")}
-                 [:a
-                  {:on-click (fn [ev]
-                               (.preventDefault ev)
-                               (reset! value i)
-                               (reset! panel-state :closed))}
-                  [:img {:src thumb-src}]]]))]]
+                                          (get-images))} ">"]])])]
+         (case (:mode @state)
+           :loaded
+           [:ul.modal-image-grid
+            {:class (get-in options [:classes :image-grid])}
+            (doall
+             (for [i (:current-images @state)
+                   :let [thumb-src ((or (:image->thumbnail f) identity) i)
+                         current-src ((or (:image->thumbnail f) identity) @value)]]
+               ^{:key i}
+               [:li {:class (when (= thumb-src current-src) "selected")}
+                {:class (get-in options [:classes :image-grid-item])}
+                [:a
+                 {:class (get-in options [:classes :image-grid-link])}
+                 {:on-click (fn [ev]
+                              (.preventDefault ev)
+                              (reset! value i)
+                              (reset! panel-state :closed))}
+                 [:img
+                  {:class (get-in options [:classes :image-grid-image])}
+                  {:src thumb-src}]]]))]
            :error
            [:div.error
-            [:h4 "Loading Error."]
-            [:button {:on-click (fn [ev]
-                                  (.preventDefault ev)
-                                  (get-images))}
+            {:class (get-in options [:classes :error])}
+            [:h4
+             {:class (get-in options [:classes :error-txt])}
+             "Loading Error."]
+            [:button.retry-button
+             {:class (get-in options [:classes :retry-button])}
+             {:on-click (fn [ev]
+                          (.preventDefault ev)
+                          (get-images))}
              "Retry"]]
            :loading
-           [:h4 "Loading"])])})))
+           [:h4
+            {:class (get-in options [:classes :loading])}
+            "Loading"])])})))
 
 (defn panel-select [panel-state]
   [:ul.formic-image-modal-panel-select
