@@ -103,6 +103,7 @@
 ;; Select panel
 
 (defn select-panel [panel-state {:keys [value err options]}]
+  (println options)
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page nil
                        :current-images nil
@@ -183,23 +184,25 @@
             {:class (get-in options [:classes :image-grid])}
             (doall
              (for [i (:current-images @state)
-                   :let [thumb-src ((or (:image->thumbnail f) identity) i)
-                         current-src ((or (:image->thumbnail f) identity) @value)
+                   :let [thumb-src ((or (:image->thumbnail options) identity) i)
+                         current-src (when @value
+                                       ((or (:image->thumbnail options) identity)
+                                        @value))
                          selected (= i @value)]]
                ^{:key i}
-               [:li {:class (when selected "selected")}
+               [:li
                 {:class (get-in options (if selected
                                           [:classes :image-grid-item-selected]
                                           [:classes :image-grid-item]))}
                 [:a
-                 {:class (get-in options [:classes :image-grid-link])}
-                 {:on-click (fn [ev]
+                 {:class (get-in options [:classes :image-grid-link])
+                  :on-click (fn [ev]
                               (.preventDefault ev)
                               (reset! value i)
                               (reset! panel-state :closed))}
                  [:img
-                  {:class (get-in options [:classes :image-grid-image])}
-                  {:src thumb-src}]]]))]
+                  {:class (get-in options [:classes :image-grid-image])
+                   :src thumb-src}]]]))]
            :error
            [:div.error
             {:class (get-in options [:classes :error])}
@@ -242,9 +245,10 @@
         (u/format-kw id)]
        (if @(:value f)
          [:img.formic-image-current
-          {:src ((or
-                  (image->src f)
-                  (image->thumbnail f)
+          {:class (get-in options [:classes :image-current])
+           :src ((or
+                  (:image->src options)
+                  (:image->thumbnail options)
                   identity)
                  @(:value f))}]
          [:h4 "Not Selected"])
