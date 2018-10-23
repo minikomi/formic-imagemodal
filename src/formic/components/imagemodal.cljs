@@ -12,6 +12,19 @@
 ;;    -- optional page var
 ;;    -- optional search-str var
 
+(defn assoc-if
+  "assoc key/value pairs to the map only on non-nil values
+
+   (assoc-if {} :a 1)
+   => {:a 1}
+
+   (assoc-if {} :a 1 :b nil)
+   => {:a 1}"
+  ([m k v]
+     (if (not (nil? v)) (assoc m k v) m))
+  ([m k v & more]
+     (apply assoc-if (assoc-if m k v) more)))
+
 ;; Server Upload
 ;; -------------------------------------------------------------------------------
 
@@ -91,7 +104,7 @@
 
 (defn select-panel [panel-state {:keys [value err options]}]
   (let [{:keys [endpoints]} options
-        state (r/atom {:current-page 0
+        state (r/atom {:current-page nil
                        :current-images nil
                        :search-str nil
                        :mode :loading})
@@ -107,8 +120,9 @@
                                     :next-page (:next-page data)
                                     :prev-page (:prev-page data)
                                     :mode :loaded))
-                           :params {:page (:current-page @state)
-                                    :search-str (or (:search-str @state) "")}
+                           :params (assoc-if {}
+                                     :page (:current-page @state)
+                                     :search-str (:search-str @state))
                            :error-handler
                            (fn [_]
                              (swap! state assoc
@@ -142,8 +156,8 @@
                :href "#"
                :on-click (fn [ev]
                            (.preventDefault ev)
-                           (when (not (str/blank? (:search-str @state)))
-                             (get-images)))}
+                           (swap! state assoc :page 0)
+                           (get-images))}
               "Search"]])
           (when (and (:paging options)
                      (or (:next-page @state) (:prev-page @state)))
@@ -154,14 +168,14 @@
                       :href "#"
                       :on-click (fn [ev]
                                   (.preventDefault ev)
-                                  (swap! state update-in [:current-page] dec)
+                                  (swap! state update-in [:current-page] (:prev-page @state))
                                   (get-images))} "<"]])
              (when (:next-page @state)
                [:li [:button {:class (get-in options [:classes :page-button])
                               :href "#"
                               :on-click (fn [ev]
                                           (.preventDefault ev)
-                                          (swap! state update-in [:current-page] inc)
+                                          (swap! state update-in [:current-page] (:next-page @state))
                                           (get-images))} ">"]])])]
          (case (:mode @state)
            :loaded
@@ -170,10 +184,13 @@
             (doall
              (for [i (:current-images @state)
                    :let [thumb-src ((or (:image->thumbnail f) identity) i)
-                         current-src ((or (:image->thumbnail f) identity) @value)]]
+                         current-src ((or (:image->thumbnail f) identity) @value)
+                         selected (= i @value)]]
                ^{:key i}
-               [:li {:class (when (= thumb-src current-src) "selected")}
-                {:class (get-in options [:classes :image-grid-item])}
+               [:li {:class (when selected "selected")}
+                {:class (get-in options (if selected
+                                          [:classes :image-grid-item-selected]
+                                          [:classes :image-grid-item]))}
                 [:a
                  {:class (get-in options [:classes :image-grid-link])}
                  {:on-click (fn [ev]
@@ -190,8 +207,8 @@
              {:class (get-in options [:classes :error-txt])}
              "Loading Error."]
             [:button.retry-button
-             {:class (get-in options [:classes :retry-button])}
-             {:on-click (fn [ev]
+             {:class (get-in options [:classes :retry-button])
+              :on-click (fn [ev]
                           (.preventDefault ev)
                           (get-images))}
              "Retry"]]
