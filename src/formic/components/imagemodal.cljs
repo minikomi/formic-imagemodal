@@ -102,7 +102,7 @@
 
 ;; Select panel
 
-(defn select-panel [panel-state {:keys [value err options]}]
+(defn select-panel [panel-state {:keys [value touched err options]}]
   (println options)
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page nil
@@ -199,6 +199,7 @@
                   :on-click (fn [ev]
                               (.preventDefault ev)
                               (reset! value i)
+                              (reset! touched true)
                               (reset! panel-state :closed))}
                  [:img
                   {:class (get-in options [:classes :image-grid-image])
