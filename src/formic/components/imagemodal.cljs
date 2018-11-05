@@ -3,6 +3,7 @@
             [cljsjs.dropzone]
             [reagent.core :as r]
             [formic.util :as u]
+            [formic.components.inputs :as inputs]
             [formic.field :as field]
             [clojure.string :as str]))
 
@@ -231,8 +232,7 @@
                [:span "TODO"]
                ;;[s3-upload-panel panel-state f]
                [upload-panel panel-state f]))]])
-       (when @err
-         [:h3.error @err])])))
+       [inputs/error-label f @err]])))
 
 (field/register-component
  :formic-imagemodal
