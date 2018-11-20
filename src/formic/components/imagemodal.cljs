@@ -4,6 +4,9 @@
             [reagent.core :as r]
             [formic.util :as u]
             [formic.components.inputs :as inputs]
+            [goog.events :as events]
+            [goog.events.EventType :as event-type]
+            [goog.events.KeyCodes :as key-codes]
             [formic.field :as field]
             [clojure.string :as str]))
 
@@ -43,8 +46,7 @@
         (.on dz "sending" (fn [ev]
                             (reset! panel-state :sending)))
         (.on dz "complete" (fn [ev]
-                             (reset! panel-state :select)))
-        ))
+                             (reset! panel-state :select)))))
     :reagent-render
     (fn [panel-state f]
       [:div.dropzone.needsclick.dz-clickable
@@ -53,32 +55,64 @@
 
 ;; Select panel
 
-(defn loaded-panel [options state value touched panel-state]
-  [:ul.modal-image-grid
-   {:class (get-in options [:classes :image-grid])}
-   (doall
-    (for [i (:current-images @state)
-          :let [thumb-src ((or (:image->thumbnail options) identity) i)
-                current-src (when @value
-                              ((or (:image->thumbnail options) identity)
-                               @value))
-                selected (= i @value)]]
-      ^{:key i}
-      [:li
-       {:class (get-in options (if selected
-                                 [:classes :image-grid-item-selected]
-                                 [:classes :image-grid-item]))}
-       [:a
-        {:class (get-in options [:classes :image-grid-link])
-         :on-click (fn [ev]
-                     (.preventDefault ev)
-                     (reset! value i)
-                     (reset! touched true)
-                     (reset! panel-state :closed))}
-        [:img
-         {:class (get-in options [:classes :image-grid-image])
-          :src thumb-src}]]]))])
+(defn panel-paging [state options get-images-fn]
+  [:ul
+   (when (:prev-page @state)
+     [:li [:a.formic-image-page-button
+           {:class (get-in options [:classes :page-button])
+            :href "#"
+            :on-click (fn [ev]
+                        (.preventDefault ev)
+                        (swap! state update-in [:current-page] dec)
+                        (get-images-fn))} "<"]])
+   [:li
+    [:h5
+     {:class (get-in options [:classes :modal-panel-title])}
+     "Page " (-> @state :current-page inc)]]
+   (when (:next-page @state)
+     [:li
+      [:a {:class (get-in options [:classes :page-button])
+           :href "#"
+           :on-click (fn [ev]
+                       (.preventDefault ev)
+                       (swap! state update-in [:current-page] inc)
+                       (get-images-fn))} ">"]])])
 
+(defn loaded-panel [state options get-images-fn value touched panel-state]
+  [:div
+   [:ul.modal-image-grid
+    {:class (get-in options [:classes :image-grid])}
+    (doall
+     (for [i (:current-images @state)
+           :let [thumb-src ((or (:image->thumbnail options) identity) i)
+                 current-src (when @value
+                               ((or (:image->thumbnail options) identity)
+                                @value))
+                 selected (= i @value)]]
+       ^{:key i}
+       [:li
+        {:class (get-in options (if selected
+                                  [:classes :image-grid-item-selected]
+                                  [:classes :image-grid-item]))}
+        [:a
+         {:class (get-in options [:classes :image-grid-link])
+          :on-click (fn [ev]
+                      (.preventDefault ev)
+                      (reset! value i)
+                      (reset! touched true)
+                      (reset! panel-state :closed))}
+         [:img
+          {:class (get-in options [:classes :image-grid-image])
+           :src thumb-src}]
+         [:h5
+          {:class (get-in options [:classes :image-grid-filename])}
+          (-> thumb-src
+              (str/split #"^.*?([^\\\/]*)$")
+              last)]
+         ]]))]
+   (when (and (:paging options)
+              (or (:next-page @state) (:prev-page @state)))
+     [panel-paging state options get-images-fn])])
 
 (defn error-panel [get-images-fn classes]
   [:div.error
@@ -93,11 +127,16 @@
                  (get-images-fn))}
     "Retry"]])
 
-(defn panel-search [ state options get-images-fn]
+(defn panel-search [state options get-images-fn]
   [:div
    [:input {:type "text"
             :value (:search-str @state)
             :class (get-in options [:classes :search-input])
+            :on-key-down
+            (fn [ev]
+              (when (= ev.keyCode key-codes/ENTER)
+                (swap! state assoc :current-page 0)
+                (get-images-fn)))
             :on-change (fn [ev]
                          (swap! state
                                 assoc
@@ -107,35 +146,19 @@
      :href "#"
      :on-click (fn [ev]
                  (.preventDefault ev)
-                 (swap! state assoc :page 0)
+                 (swap! state assoc :current-page 0)
                  (get-images-fn))}
     "Search"]])
 
-(defn panel-paging [state options get-images-fn]
-  [:ul
-   (when (:prev-page @state)
-     [:li [:a.formic-image-page-button
-           {:class (get-in options [:classes :page-button])
-            :href "#"
-            :on-click (fn [ev]
-                        (.preventDefault ev)
-                        (swap! state update-in [:current-page] (:prev-page @state))
-                        (get-images-fn))} "<"]])
-   (when (:next-page @state)
-     [:li [:button {:class (get-in options [:classes :page-button])
-                    :href "#"
-                    :on-click (fn [ev]
-                                (.preventDefault ev)
-                                (swap! state update-in [:current-page] (:next-page @state))
-                                (get-images-fn))} ">"]])])
-
 (defn select-panel [panel-state {:keys [value touched err options]}]
-  (println options)
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page nil
                        :current-images nil
                        :search-str nil
                        :mode :loading})
+        close-modal-fn (fn [ev]
+                         (.preventDefault ev)
+                         (reset! panel-state :closed))
         get-images-fn (fn []
                         (swap! state assoc
                                :mode :loading
@@ -156,28 +179,65 @@
                                 (swap! state assoc
                                        :current-images nil
                                        :mode :error))}))
+        esc-fn (fn [ev]
+                 (case ev.keyCode
+                   key-codes/ESC
+                   (close-modal-fn ev)
+                   37 ;; arrow left
+                   (do
+                     (when (:prev-page @state)
+                       (swap! state update :current-page dec)
+                       (get-images-fn)))
+                   39 ;; arrow right
+                   (do
+                     (when (:next-page @state)
+                       (swap! state update :current-page inc)
+                       (get-images-fn)))
+                   true))
         classes (:classes options)]
     (r/create-class
      {:display-name "select panel"
       :component-will-mount
-      (fn [_] (get-images-fn))
+      (fn [_]
+        (get-images-fn)
+        (events/listen js/window
+                       event-type/KEYDOWN
+                       esc-fn))
+      :component-will-unmount
+      (fn [_]
+        (events/unlisten js/window
+                         event-type/KEYDOWN
+                         esc-fn))
       :reagent-render
       (fn [panel-state f]
         [:div.modal-panel
          {:class (get-in options [:classes :modal-panel])}
+
+         [:a.select-close
+          {:href "#"
+           :on-click close-modal-fn}
+          "X"]
+         (if @(:value f)
+           [:a.select-image-current
+            {:class (get-in options [:classes :select-image-current])
+             :href "#"
+             :on-click close-modal-fn}
+            [:span "Current Image:"]
+            [:img.formic-image-current
+             {:class (get-in options [:classes :image-current])
+              :src ((or
+                     (:image->src options)
+                     (:image->thumbnail options)
+                     identity)
+                    @(:value f))}]]
+           [:h4 "Not Selected"])
          [:div.modal-panel-inner
           {:class (get-in options [:classes :modal-panel-inner])}
-          [:h5
-           {:class (get-in options [:classes :modal-panel-title])}
-           "Page " (-> @state :current-page inc)]
           (when (:search options)
-            [panel-search state options get-images-fn])
-          (when (and (:paging options)
-                     (or (:next-page @state) (:prev-page @state)))
-            [panel-paging state options get-images-fn])]
+            [panel-search state options get-images-fn])]
          (case (:mode @state)
            :loaded
-           [loaded-panel options state value touched panel-state]
+           [loaded-panel state options get-images-fn value touched panel-state]
            :error
            [error-panel get-images-fn classes]
            :loading
@@ -186,18 +246,19 @@
             "Loading"])])})))
 
 (defn panel-select [panel-state]
-  [:ul.formic-image-modal-panel-select
-   (when (not= @panel-state :sending)
-     (doall
-      (for [new-state [:select :upload]]
-        ^{:key new-state}
-        [:li
-         {:class (when (= @panel-state new-state) "active") }
-         [:a {:href "#"
-              :on-click (fn [ev]
-                          (.preventDefault ev)
-                          (reset! panel-state new-state))}
-          (name new-state)]])))])
+  [:div
+   [:ul.formic-image-modal-panel-select
+    (when (not= @panel-state :sending)
+      (doall
+       (for [new-state [:select :upload]]
+         ^{:key new-state}
+         [:li
+          {:class (when (= @panel-state new-state) "active") }
+          [:a {:href "#"
+               :on-click (fn [ev]
+                           (.preventDefault ev)
+                           (reset! panel-state new-state))}
+           (name new-state)]])))]])
 
 (defn image-field [{:keys [id err options] :as f}]
   (let [panel-state (r/atom :closed)
