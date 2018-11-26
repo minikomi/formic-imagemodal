@@ -265,35 +265,32 @@
         {:keys [image->src
                 image->thumbnail]} options]
     (fn [f]
-      [:div.formic-image-field
-       {:class (when @err "error")}
-       [:span.formic-input-title
-        (u/format-kw id)]
-       (if @(:value f)
-         [:img.formic-image-current
-          {:class (get-in options [:classes :image-current])
-           :src ((or
-                  (:image->src options)
-                  (:image->thumbnail options)
-                  identity)
-                 @(:value f))}]
-         [:h4 "Not Selected"])
-       [:a.formic-image-open-modal.button
-        {:on-click (fn [ev]
-                     (.preventDefault ev)
-                     (reset! panel-state :select))} "Select"]
-       (when (not= :closed @panel-state)
-         [:div.formic-image-modal
-          [:div.formic-image-modal-inner
-           [panel-select panel-state]
-           (case @panel-state
-             :select [select-panel panel-state f]
-             (:sending :upload)
-             (if (get-in f [:options :endpoints :get-signed])
-               [:span "TODO"]
-               ;;[s3-upload-panel panel-state f]
-               [upload-panel panel-state f]))]])
-       [inputs/error-label f @err]])))
+      [inputs/common-wrapper f
+       [:div.formic-image-field
+        (if @(:value f)
+          [:img.formic-image-current
+           {:class (get-in options [:classes :image-current])
+            :src ((or
+                   (:image->src options)
+                   (:image->thumbnail options)
+                   identity)
+                  @(:value f))}]
+          [:h4 "Not Selected"])
+        [:a.formic-image-open-modal.button
+         {:on-click (fn [ev]
+                      (.preventDefault ev)
+                      (reset! panel-state :select))} "Select"]
+        (when (not= :closed @panel-state)
+          [:div.formic-image-modal
+           [:div.formic-image-modal-inner
+            [panel-select panel-state]
+            (case @panel-state
+              :select [select-panel panel-state f]
+              (:sending :upload)
+              (if (get-in f [:options :endpoints :get-signed])
+                [:span "TODO"]
+                ;;[s3-upload-panel panel-state f]
+                [upload-panel panel-state f]))]])]])))
 
 (field/register-component
  :formic-imagemodal
