@@ -2,7 +2,7 @@
   (:require [ajax.core :refer [GET POST]]
             [cljsjs.dropzone]
             [reagent.core :as r]
-            [formic.util :as u]
+            [formic.util :as futil]
             [formic.components.inputs :as inputs]
             [goog.events :as events]
             [goog.events.EventType :as event-type]
@@ -181,7 +181,7 @@
                                        :mode :error))}))
         esc-fn (fn [ev]
                  (case ev.keyCode
-                   key-codes/ESC
+                   27
                    (close-modal-fn ev)
                    37 ;; arrow left
                    (do
@@ -200,11 +200,13 @@
       :component-will-mount
       (fn [_]
         (get-images-fn)
+        (futil/set-body-class "formic-image-modal-open" true)
         (events/listen js/window
                        event-type/KEYDOWN
                        esc-fn))
       :component-will-unmount
       (fn [_]
+        (futil/set-body-class "formic-image-modal-open" false)
         (events/unlisten js/window
                          event-type/KEYDOWN
                          esc-fn))
@@ -279,7 +281,7 @@
                     (:image->thumbnail options)
                     identity)
                    @(:value f))}]
-           [:h4 "Not Selected"])
+           [:h4.formic-image-not-selected "Not Selected"])
          [:span.formic-image-open-modal-label-wrapper
           [:span.formic-image-open-modal-label "SELECT"]]]
         (when (not= :closed @panel-state)
