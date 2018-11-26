@@ -56,31 +56,36 @@
 ;; Select panel
 
 (defn panel-paging [state options get-images-fn]
-  [:ul
-   (when (:prev-page @state)
-     [:li [:a.formic-image-page-button
-           {:class (get-in options [:classes :page-button])
-            :href "#"
-            :on-click (fn [ev]
-                        (.preventDefault ev)
-                        (swap! state update-in [:current-page] dec)
-                        (get-images-fn))} "<"]])
-   [:li
+  [:ul.formic-image-modal-paging
+   [:li.formic-image-modal-prev
+    (when (< 0 (:current-page @state 0))
+      [:a.button
+       {:class (get-in options [:classes :page-button])
+        :href "#"
+        :on-click (fn [ev]
+                    (.preventDefault ev)
+                    (swap! state update-in [:current-page] dec)
+                    (get-images-fn))} "<"])]
+   [:li.formic-image-modal-page-number
     [:h5
      {:class (get-in options [:classes :modal-panel-title])}
      "Page " (-> @state :current-page inc)]]
-   (when (:next-page @state)
-     [:li
-      [:a {:class (get-in options [:classes :page-button])
+   [:li.formic-image-modal-next
+    (when (:next-page @state)
+      [:a.button {:class (get-in options [:classes :page-button])
            :href "#"
            :on-click (fn [ev]
                        (.preventDefault ev)
                        (swap! state update-in [:current-page] inc)
-                       (get-images-fn))} ">"]])])
+                       (get-images-fn))} ">"])]])
 
 (defn loaded-panel [state options get-images-fn value touched panel-state]
   [:div
-   [:ul.modal-image-grid
+   (when (and (:paging options)
+              (or (:next-page @state)
+                  (< 0 (:current-page @state 0))))
+     [panel-paging state options get-images-fn])
+   [:ul.formic-image-modal-grid
     {:class (get-in options [:classes :image-grid])}
     (doall
      (for [i (:current-images @state)
@@ -110,9 +115,7 @@
               (str/split #"^.*?([^\\\/]*)$")
               last)]
          ]]))]
-   (when (and (:paging options)
-              (or (:next-page @state) (:prev-page @state)))
-     [panel-paging state options get-images-fn])])
+   ])
 
 (defn error-panel [get-images-fn classes]
   [:div.error
@@ -128,7 +131,7 @@
     "Retry"]])
 
 (defn panel-search [state options get-images-fn]
-  [:div
+  [:div.formic-image-modal-search
    [:input {:type "text"
             :value (:search-str @state)
             :class (get-in options [:classes :search-input])
@@ -141,7 +144,7 @@
                          (swap! state
                                 assoc
                                 :search-str (.. ev -target -value)))}]
-   [:a.formic-image-search-button
+   [:a
     {:class (get-in options [:classes :search-button])
      :href "#"
      :on-click (fn [ev]
@@ -154,7 +157,7 @@
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page nil
                        :current-images nil
-                       :search-str nil
+                       :search-str (:initial-search-str options)
                        :mode :loading})
         close-modal-fn (fn [ev]
                          (.preventDefault ev)
@@ -212,14 +215,14 @@
                          esc-fn))
       :reagent-render
       (fn [panel-state f]
-        [:div.modal-panel
+        [:div.formic-image-modal-panel
          {:class (get-in options [:classes :modal-panel])}
-         [:a.select-close
+         [:a.formic-image-modal-close
           {:href "#"
            :on-click close-modal-fn}
           "X"]
          (if @(:value f)
-           [:a.select-image-current
+           [:a.formic-image-modal-current
             {:class (get-in options [:classes :select-image-current])
              :href "#"
              :on-click close-modal-fn}
@@ -232,7 +235,7 @@
                      identity)
                     @(:value f))}]]
            [:h4 "Not Selected"])
-         [:div.modal-panel-inner
+         [:div.formic-image-modal-panel-inner
           {:class (get-in options [:classes :modal-panel-inner])}
           (when (:search options)
             [panel-search state options get-images-fn])]
@@ -259,37 +262,37 @@
                :on-click (fn [ev]
                            (.preventDefault ev)
                            (reset! panel-state new-state))}
-           (name new-state)]])))]])
+           (str/upper-case (name new-state))]])))]])
 
 (defn image-modal [panel-state f]
- (let [el (atom nil)
-       on-click-outside
-       (fn [ev]
-         (when (and (not= ev.target @el)
-                    (not (.contains @el ev.target)))
-           (reset! panel-state :closed)))]
-  (r/create-class
-   {:component-will-mount
-    #(events/listen js/window
-                   event-type/CLICK
-                   on-click-outside)
-    :component-will-unmount
-    #(events/unlisten js/window
-                     event-type/CLICK
-                     on-click-outside)
-    :reagent-render
-    (fn [panel-state f]
-      [:div.formic-image-modal
-       [:div.formic-image-modal-inner
-        {:ref #(reset! el %)}
-        [panel-select panel-state]
-        (case @panel-state
-          :select [select-panel panel-state f]
-          (:sending :upload)
-          (if (get-in f [:options :endpoints :get-signed])
-            [:span "TODO"]
-            ;;[s3-upload-panel panel-state f]
-            [upload-panel panel-state f]))]])})))
+  (let [el (atom nil)
+        on-click-outside
+        (fn [ev]
+          (when (and (not= ev.target @el)
+                     (not (.contains @el ev.target)))
+            (reset! panel-state :closed)))]
+    (r/create-class
+     {:component-will-mount
+      #(events/listen js/window
+                      event-type/CLICK
+                      on-click-outside)
+      :component-will-unmount
+      #(events/unlisten js/window
+                        event-type/CLICK
+                        on-click-outside)
+      :reagent-render
+      (fn [panel-state f]
+        [:div.formic-image-modal
+         [:div.formic-image-modal-inner
+          {:ref #(reset! el %)}
+          [panel-select panel-state]
+          (case @panel-state
+            :select [select-panel panel-state f]
+            (:sending :upload)
+            (if (get-in f [:options :endpoints :get-signed])
+              [:span "TODO"]
+              ;;[s3-upload-panel panel-state f]
+              [upload-panel panel-state f]))]])})))
 
 (defn image-field [{:keys [id err options] :as f}]
   (let [panel-state (r/atom :closed)
@@ -298,7 +301,6 @@
     (fn [f]
       [inputs/common-wrapper f
        [:div.formic-image-field
-
         [:a.formic-image-open-modal.button
          {:on-click (fn [ev]
                       (.preventDefault ev)
