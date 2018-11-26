@@ -212,7 +212,6 @@
       (fn [panel-state f]
         [:div.modal-panel
          {:class (get-in options [:classes :modal-panel])}
-
          [:a.select-close
           {:href "#"
            :on-click close-modal-fn}
@@ -267,19 +266,22 @@
     (fn [f]
       [inputs/common-wrapper f
        [:div.formic-image-field
-        (if @(:value f)
-          [:img.formic-image-current
-           {:class (get-in options [:classes :image-current])
-            :src ((or
-                   (:image->src options)
-                   (:image->thumbnail options)
-                   identity)
-                  @(:value f))}]
-          [:h4 "Not Selected"])
+
         [:a.formic-image-open-modal.button
          {:on-click (fn [ev]
                       (.preventDefault ev)
-                      (reset! panel-state :select))} "Select"]
+                      (reset! panel-state :select))}
+         (if @(:value f)
+           [:img.formic-image-current
+            {:class (get-in options [:classes :image-current])
+             :src ((or
+                    (:image->src options)
+                    (:image->thumbnail options)
+                    identity)
+                   @(:value f))}]
+           [:h4 "Not Selected"])
+         [:span.formic-image-open-modal-label-wrapper
+          [:span.formic-image-open-modal-label "SELECT"]]]
         (when (not= :closed @panel-state)
           [:div.formic-image-modal
            [:div.formic-image-modal-inner
