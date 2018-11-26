@@ -261,6 +261,36 @@
                            (reset! panel-state new-state))}
            (name new-state)]])))]])
 
+(defn image-modal [panel-state f]
+ (let [el (atom nil)
+       on-click-outside
+       (fn [ev]
+         (when (and (not= ev.target @el)
+                    (not (.contains @el ev.target)))
+           (reset! panel-state :closed)))]
+  (r/create-class
+   {:component-will-mount
+    #(events/listen js/window
+                   event-type/CLICK
+                   on-click-outside)
+    :component-will-unmount
+    #(events/unlisten js/window
+                     event-type/CLICK
+                     on-click-outside)
+    :reagent-render
+    (fn [panel-state f]
+      [:div.formic-image-modal
+       [:div.formic-image-modal-inner
+        {:ref #(reset! el %)}
+        [panel-select panel-state]
+        (case @panel-state
+          :select [select-panel panel-state f]
+          (:sending :upload)
+          (if (get-in f [:options :endpoints :get-signed])
+            [:span "TODO"]
+            ;;[s3-upload-panel panel-state f]
+            [upload-panel panel-state f]))]])})))
+
 (defn image-field [{:keys [id err options] :as f}]
   (let [panel-state (r/atom :closed)
         {:keys [image->src
@@ -285,16 +315,7 @@
          [:span.formic-image-open-modal-label-wrapper
           [:span.formic-image-open-modal-label "SELECT"]]]
         (when (not= :closed @panel-state)
-          [:div.formic-image-modal
-           [:div.formic-image-modal-inner
-            [panel-select panel-state]
-            (case @panel-state
-              :select [select-panel panel-state f]
-              (:sending :upload)
-              (if (get-in f [:options :endpoints :get-signed])
-                [:span "TODO"]
-                ;;[s3-upload-panel panel-state f]
-                [upload-panel panel-state f]))]])]])))
+          [image-modal panel-state f])]])))
 
 (field/register-component
  :formic-imagemodal
