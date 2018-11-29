@@ -6,8 +6,8 @@
             [formic.components.inputs :as inputs]
             [goog.events :as events]
             [goog.events.EventType :as event-type]
-            [goog.events.KeyCodes :as key-codes]
             [formic.field :as field]
+            [goog.events.KeyCodes :as key-codes]
             [clojure.string :as str]))
 
 ;; required endpoints
@@ -137,9 +137,12 @@
             :class (get-in options [:classes :search-input])
             :on-key-down
             (fn [ev]
-              (when (= ev.keyCode key-codes/ENTER)
+              (when (= ev.keyCode 13)
+                (.stopPropagation ev)
+                (.preventDefault ev)
                 (swap! state assoc :current-page 0)
-                (get-images-fn)))
+                (get-images-fn)
+                false))
             :on-change (fn [ev]
                          (swap! state
                                 assoc
@@ -186,16 +189,6 @@
                  (case ev.keyCode
                    27
                    (close-modal-fn ev)
-                   37 ;; arrow left
-                   (do
-                     (when (:prev-page @state)
-                       (swap! state update :current-page dec)
-                       (get-images-fn)))
-                   39 ;; arrow right
-                   (do
-                     (when (:next-page @state)
-                       (swap! state update :current-page inc)
-                       (get-images-fn)))
                    true))
         classes (:classes options)]
     (r/create-class
