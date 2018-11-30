@@ -6,6 +6,7 @@
             [formic.components.inputs :as inputs]
             [goog.events :as events]
             [goog.events.EventType :as event-type]
+            [goog.dom.classes :as gclass]
             [formic.field :as field]
             [goog.events.KeyCodes :as key-codes]
             [clojure.string :as str]))
@@ -41,12 +42,16 @@
                        (.-value (.getElementById
                                  js/document
                                  "__anti-forgery-token"))}
-             :data data}
+             :params (:dz-params options)}
             dz (js/Dropzone. "#upload" (clj->js dropzone-options))]
         (.on dz "sending" (fn [ev]
                             (reset! panel-state :sending)))
-        (.on dz "complete" (fn [ev]
-                             (reset! panel-state :select)))))
+        (.on dz "success" (fn [ev resp]
+                            (reset! panel-state :select)
+                            (when-let [f (:on-success options)]
+                              (f value (js->clj resp
+                                                :keywordize-keys true)))
+                            ))))
     :reagent-render
     (fn [panel-state f]
       [:div.dropzone.needsclick.dz-clickable
@@ -73,11 +78,11 @@
    [:li.formic-image-modal-next
     (when (:next-page @state)
       [:a.button {:class (get-in options [:classes :page-button])
-           :href "#"
-           :on-click (fn [ev]
-                       (.preventDefault ev)
-                       (swap! state update-in [:current-page] inc)
-                       (get-images-fn))} ">"])]])
+                  :href "#"
+                  :on-click (fn [ev]
+                              (.preventDefault ev)
+                              (swap! state update-in [:current-page] inc)
+                              (get-images-fn))} ">"])]])
 
 (defn loaded-panel [state options get-images-fn value touched panel-state]
   [:div
@@ -245,24 +250,38 @@
 (defn panel-select [panel-state]
   [:div
    [:ul.formic-image-modal-panel-select
-    (when (not= @panel-state :sending)
-      (doall
-       (for [new-state [:select :upload]]
-         ^{:key new-state}
-         [:li
-          {:class (when (= @panel-state new-state) "active") }
-          [:a {:href "#"
-               :on-click (fn [ev]
-                           (.preventDefault ev)
-                           (reset! panel-state new-state))}
-           (str/upper-case (name new-state))]])))]])
+    [:li
+     {:class (when (= @panel-state :select) "active") }
+     [:a {:href "#"
+          :on-click (fn [ev]
+                      (.preventDefault ev)
+                      (when
+                          (not= @panel-state :sending)
+                        (reset! panel-state :select)))}
+      (str/upper-case (name :select))]]
+    [:li
+     {:class (when (or
+                    (= @panel-state :sending)
+                    (= @panel-state :upload)) "active") }
+     [:a {:href "#"
+          :on-click (fn [ev]
+                      (.preventDefault ev)
+                      (reset! panel-state :upload))}
+      (str/upper-case (name :upload))]]]])
 
 (defn image-modal [panel-state f]
   (let [el (atom nil)
         on-click-outside
         (fn [ev]
-          (when (and (not= ev.target @el)
-                     (not (.contains @el ev.target)))
+          (when (and
+                 (not= @panel-state :sending)
+                 (not= ev.target @el)
+                 (not (.contains @el ev.target))
+                 (not (gclass/has ev.target "dz-hidden-input")))
+            (js/console.log
+             "click outside"
+             @el
+             ev.target)
             (reset! panel-state :closed)))]
     (r/create-class
      {:component-will-mount
@@ -295,7 +314,8 @@
       [inputs/common-wrapper f
        [:div.formic-image-field
         [:a.formic-image-open-modal.button
-         {:on-click (fn [ev]
+         {:href "#"
+          :on-click (fn [ev]
                       (.preventDefault ev)
                       (reset! panel-state :select))}
          (if @(:value f)
