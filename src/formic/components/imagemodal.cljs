@@ -50,8 +50,7 @@
                             (reset! panel-state :select)
                             (when-let [f (:on-success options)]
                               (f value (js->clj resp
-                                                :keywordize-keys true)))
-                            ))))
+                                                :keywordize-keys true)))))))
     :reagent-render
     (fn [panel-state f]
       [:div.dropzone.needsclick.dz-clickable
@@ -84,6 +83,12 @@
                               (swap! state update-in [:current-page] inc)
                               (get-images-fn))} ">"])]])
 
+(defn default-img->title [options img]
+  (-> img
+      ((:image->thumbnail options))
+      (str/split #"^.*?([^\\\/]*)$")
+      last))
+
 (defn loaded-panel [state options get-images-fn value touched panel-state]
   [:div
    (when (and (:paging options)
@@ -98,7 +103,11 @@
                  current-src (when @value
                                ((or (:image->thumbnail options) identity)
                                 @value))
-                 selected (= i @value)]]
+                 selected (= i @value)
+                 img-title
+                 (if-let [f (:image->title options)]
+                   (f i)
+                   (default-img->title options i))]]
        ^{:key i}
        [:li
         {:class (get-in options (if selected
@@ -114,13 +123,11 @@
          [:img
           {:class (get-in options [:classes :image-grid-image])
            :src thumb-src}]
-         [:h5
-          {:class (get-in options [:classes :image-grid-filename])}
-          (-> thumb-src
-              (str/split #"^.*?([^\\\/]*)$")
-              last)]
-         ]]))]
-   ])
+         (when img-title
+          [:h5
+           {:class (get-in options [:classes :image-grid-filename])}
+           img-title
+           ])]]))]])
 
 (defn error-panel [get-images-fn classes]
   [:div.error
@@ -161,6 +168,27 @@
                  (get-images-fn))}
     "Search"]])
 
+(defn default-list-images-fn [endpoints state]
+  (swap! state assoc
+         :mode :loading
+         :current-images nil)
+  (GET (:list endpoints)
+       {:handler
+        (fn [data]
+          (swap! state assoc
+                 :current-images (:images data)
+                 :next-page (:next-page data)
+                 :prev-page (:prev-page data)
+                 :mode :loaded))
+        :params (assoc-if {}
+                          :page (:current-page @state)
+                          :search-str (:search-str @state))
+        :error-handler
+        (fn [_]
+          (swap! state assoc
+                 :current-images nil
+                 :mode :error))}))
+
 (defn select-panel [panel-state {:keys [value touched err options]}]
   (let [{:keys [endpoints]} options
         state (r/atom {:current-page nil
@@ -171,25 +199,9 @@
                          (.preventDefault ev)
                          (reset! panel-state :closed))
         get-images-fn (fn []
-                        (swap! state assoc
-                               :mode :loading
-                               :current-images nil)
-                        (GET (:list endpoints)
-                             {:handler
-                              (fn [data]
-                                (swap! state assoc
-                                       :current-images (:images data)
-                                       :next-page (:next-page data)
-                                       :prev-page (:prev-page data)
-                                       :mode :loaded))
-                              :params (assoc-if {}
-                                                :page (:current-page @state)
-                                                :search-str (:search-str @state))
-                              :error-handler
-                              (fn [_]
-                                (swap! state assoc
-                                       :current-images nil
-                                       :mode :error))}))
+                        (if-let [f (:list-images-fn options)]
+                          (f endpoints state)
+                          (default-list-images-fn endpoints state)))
         esc-fn (fn [ev]
                  (case ev.keyCode
                    27
@@ -247,27 +259,28 @@
             {:class (get-in options [:classes :loading])}
             "Loading"])])})))
 
-(defn panel-select [panel-state]
+(defn panel-select [panel-state upload-panel?]
   [:div
    [:ul.formic-image-modal-panel-select
     [:li
-     {:class (when (= @panel-state :select) "active") }
+     {:class (when (= @panel-state :select) "active")}
      [:a {:href "#"
           :on-click (fn [ev]
                       (.preventDefault ev)
                       (when
-                          (not= @panel-state :sending)
+                       (not= @panel-state :sending)
                         (reset! panel-state :select)))}
       (str/upper-case (name :select))]]
-    [:li
-     {:class (when (or
-                    (= @panel-state :sending)
-                    (= @panel-state :upload)) "active") }
-     [:a {:href "#"
-          :on-click (fn [ev]
-                      (.preventDefault ev)
-                      (reset! panel-state :upload))}
-      (str/upper-case (name :upload))]]]])
+    (when upload-panel?
+     [:li
+      {:class (when (or
+                     (= @panel-state :sending)
+                     (= @panel-state :upload)) "active")}
+      [:a {:href "#"
+           :on-click (fn [ev]
+                       (.preventDefault ev)
+                       (reset! panel-state :upload))}
+       (str/upper-case (name :upload))]])]])
 
 (defn image-modal [panel-state f]
   (let [el (atom nil)
@@ -297,7 +310,7 @@
         [:div.formic-image-modal
          [:div.formic-image-modal-inner
           {:ref #(reset! el %)}
-          [panel-select panel-state]
+          [panel-select panel-state (boolean (get-in f [:options :endpoints :upload]))]
           (case @panel-state
             :select [select-panel panel-state f]
             (:sending :upload)
