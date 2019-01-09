@@ -168,6 +168,12 @@
                  (get-images-fn))}
     "Search"]])
 
+(defn default-error-handler [state]
+  (fn [_]
+   (swap! state assoc
+          :current-images nil
+          :mode :error)))
+
 (defn default-list-images-fn [endpoints state]
   (swap! state assoc
          :mode :loading
@@ -184,10 +190,8 @@
                           :page (:current-page @state)
                           :search-str (:search-str @state))
         :error-handler
-        (fn [_]
-          (swap! state assoc
-                 :current-images nil
-                 :mode :error))}))
+        (default-error-handler state)
+        }))
 
 (defn select-panel [panel-state {:keys [value touched err options]}]
   (let [{:keys [endpoints]} options
@@ -259,31 +263,35 @@
             {:class (get-in options [:classes :loading])}
             "Loading"])])})))
 
-(defn panel-select [panel-state upload-panel?]
-  [:div
-   [:ul.formic-image-modal-panel-select
-    [:li
-     {:class (when (= @panel-state :select) "active")}
-     [:a {:href "#"
-          :on-click (fn [ev]
-                      (.preventDefault ev)
-                      (when
-                       (not= @panel-state :sending)
-                        (reset! panel-state :select)))}
-      (str/upper-case (name :select))]]
-    (when upload-panel?
+(defn panel-select [panel-state f]
+  (let [classes (get-in f [:classes :select])]
+   [:div
+    [:ul.formic-image-modal-panel-select
      [:li
-      {:class (when (or
-                     (= @panel-state :sending)
-                     (= @panel-state :upload)) "active")}
+      {:class (inputs/add-cls
+               ()
+               (when (= @panel-state :select) "active"))}
       [:a {:href "#"
            :on-click (fn [ev]
                        (.preventDefault ev)
-                       (reset! panel-state :upload))}
-       (str/upper-case (name :upload))]])]])
+                       (when
+                           (not= @panel-state :sending)
+                           (reset! panel-state :select)))}
+       (str/upper-case (name :select))]]
+     (when (boolean (get-in f [:options :endpoints :upload]))
+       [:li
+        {:class (when (or
+                       (= @panel-state :sending)
+                       (= @panel-state :upload)) "active")}
+        [:a {:href "#"
+             :on-click (fn [ev]
+                         (.preventDefault ev)
+                         (reset! panel-state :upload))}
+         (str/upper-case (name :upload))]])]]))
 
 (defn image-modal [panel-state f]
   (let [el (atom nil)
+        classes (get-in f [:classes :image-modal])
         on-click-outside
         (fn [ev]
           (when (and
@@ -308,9 +316,11 @@
       :reagent-render
       (fn [panel-state f]
         [:div.formic-image-modal
+         {:classes (:wrapper classes)}
          [:div.formic-image-modal-inner
-          {:ref #(reset! el %)}
-          [panel-select panel-state (boolean (get-in f [:options :endpoints :upload]))]
+          {:class (:inner classes)
+           :ref #(reset! el %)}
+          [panel-select panel-state f]
           (case @panel-state
             :select [select-panel panel-state f]
             (:sending :upload)
@@ -319,8 +329,9 @@
               ;;[s3-upload-panel panel-state f]
               [upload-panel panel-state f]))]])})))
 
-(defn image-field [{:keys [id err options] :as f}]
+(defn image-field [{:keys [id err options classes] :as f}]
   (let [panel-state (r/atom :closed)
+        modal-open-classes (:modal-open classes)
         {:keys [image->src
                 image->thumbnail]} options]
     (fn [f]
@@ -328,20 +339,25 @@
        [:div.formic-image-field
         [:a.formic-image-open-modal.button
          {:href "#"
+          :class (:wrapper modal-open-classes)
           :on-click (fn [ev]
                       (.preventDefault ev)
                       (reset! panel-state :select))}
          (if @(:value f)
            [:img.formic-image-current
-            {:class (get-in options [:classes :image-current])
+            {:class (:image-current modal-open-classes)
              :src ((or
                     (:image->src options)
                     (:image->thumbnail options)
                     identity)
                    @(:value f))}]
-           [:h4.formic-image-not-selected "Not Selected"])
+           [:h4.formic-image-not-selected
+            {:class (:not-selected modal-open-classes)}
+            "Not Selected"])
          [:span.formic-image-open-modal-label-wrapper
-          [:span.formic-image-open-modal-label "SELECT"]]]
+          [:span.formic-image-open-modal-label
+           {:class (:text modal-open-classes)}
+           "SELECT"]]]
         (when (not= :closed @panel-state)
           [image-modal panel-state f])]])))
 
