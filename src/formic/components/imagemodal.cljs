@@ -55,7 +55,8 @@
     (fn [panel-state f]
       [:div.dropzone.needsclick.dz-clickable
        [:div#upload
-        [:div.dz-message "Drop or click to upload"]]])}))
+        [:div.dz-message
+         (get-in options [:messages :drop-or-click] "Drop or click to upload")]]])}))
 
 ;; Select panel
 
@@ -240,7 +241,8 @@
             {:class (get-in options [:classes :select-image-current])
              :href "#"
              :on-click close-modal-fn}
-            [:span "Current Image:"]
+            [:span (or (get-in options [:messages :current])
+                       "Current Image") ":"]
             [:img.formic-image-current
              {:class (get-in options [:classes :image-current])
               :src ((or
@@ -248,7 +250,7 @@
                      (:image->thumbnail options)
                      identity)
                     @(:value f))}]]
-           [:h4 "Not Selected"])
+           [:h4 (or (get-in options [:messages :not-selected]) "Not Selected")])
          [:div.formic-image-modal-panel-inner
           {:class (get-in options [:classes :modal-panel-inner])}
           (when (:search options)
@@ -269,7 +271,7 @@
     [:ul.formic-image-modal-panel-select
      [:li
       {:class (inputs/add-cls
-               ()
+               (:active classes)
                (when (= @panel-state :select) "active"))}
       [:a {:href "#"
            :on-click (fn [ev]
@@ -353,11 +355,11 @@
                    @(:value f))}]
            [:h4.formic-image-not-selected
             {:class (:not-selected modal-open-classes)}
-            "Not Selected"])
+            (or (get-in options [:messages :not-selected] "Not Selected"))])
          [:span.formic-image-open-modal-label-wrapper
           [:span.formic-image-open-modal-label
            {:class (:text modal-open-classes)}
-           "SELECT"]]]
+           (get-in options [:messages :select] "SELECT")]]]
         (when (not= :closed @panel-state)
           [image-modal panel-state f])]])))
 
