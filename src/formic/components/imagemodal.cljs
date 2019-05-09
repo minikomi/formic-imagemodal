@@ -131,12 +131,12 @@
 
 (defn error-panel [get-images-fn classes]
   [:div.error
-   {:class (classes :error)}
+   {:class (:error classes)}
    [:h4
-    {:class (classes :error-txt)}
+    {:class (:error-txt classes)}
     "Loading Error."]
    [:button.retry-button
-    {:class (classes :retry-button)
+    {:class (:retry-button classes)
      :on-click (fn [ev]
                  (.preventDefault ev)
                  (get-images-fn))}
