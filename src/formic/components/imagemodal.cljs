@@ -265,10 +265,10 @@
             {:class (get-in options [:classes :loading])}
             "Loading"])])})))
 
-(defn panel-select [panel-state f]
+(defn panel-select-tabs [panel-state f]
   (let [classes (get-in f [:classes :select])]
    [:div
-    [:ul.formic-image-modal-panel-select
+    [:ul.formic-image-modal-panel-select-tabs
      [:li
       {:class (inputs/add-cls
                (:active classes)
@@ -279,7 +279,9 @@
                        (when
                            (not= @panel-state :sending)
                            (reset! panel-state :select)))}
-       (str/upper-case (name :select))]]
+       (get-in f [:options :messages :select]
+               "SELECT")]]
+
      (when (boolean (get-in f [:options :endpoints :upload]))
        [:li
         {:class (when (or
@@ -289,7 +291,8 @@
              :on-click (fn [ev]
                          (.preventDefault ev)
                          (reset! panel-state :upload))}
-         (str/upper-case (name :upload))]])]]))
+         (get-in f [:options :messages :upload]
+               "UPLOAD")]])]]))
 
 (defn image-modal [panel-state f]
   (let [el (atom nil)
@@ -322,7 +325,7 @@
          [:div.formic-image-modal-inner
           {:class (:inner classes)
            :ref #(reset! el %)}
-          [panel-select panel-state f]
+          [panel-select-tabs panel-state f]
           (case @panel-state
             :select [select-panel panel-state f]
             (:sending :upload)
